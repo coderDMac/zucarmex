@@ -6,12 +6,23 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "seed:users": "node scripts/seed-users.mjs",
+    "test:integration": "node --test tests/supabase.integration.mjs",
+    "test": "node --import tsx --test tests/domain.test.ts"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
+    "framer-motion": "^14.6.0",
+    "gsap": "^3.15.0",
+    "motion": "^14.6.0",
     "next": "16.4.2",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "react-icons": "^5.7.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -21,7 +32,9 @@
     "babel-plugin-react-compiler": "1.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
+    "prettier": "^3.9.10",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }
