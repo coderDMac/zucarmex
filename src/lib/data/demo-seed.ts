@@ -1,4 +1,4 @@
-import { Client, Order, PortalData, Product, Profile, Tier } from '@/lib/domain/types';
+import { Client, Order, PortalData, Product, Profile } from '@/lib/domain/types';
 import { addDays, today } from '@/lib/domain/dates';
 import { priceOrder } from '@/lib/domain/pricing';
 export const DEMO_CLIENT_ID = '10000000-0000-4000-8000-000000000001';
@@ -20,12 +20,6 @@ export const demoClient: Client = {
   postal_code: '80000',
   active: true,
 };
-export const demoTiers: Tier[] = [
-  { id: 1, min_quantity: 1, max_quantity: 9, discount_percent: 0 },
-  { id: 2, min_quantity: 10, max_quantity: 24, discount_percent: 2 },
-  { id: 3, min_quantity: 25, max_quantity: 49, discount_percent: 4 },
-  { id: 4, min_quantity: 50, max_quantity: null, discount_percent: 6 },
-];
 export const demoProducts: Product[] = [
   [
     '01',
@@ -35,6 +29,7 @@ export const demoProducts: Product[] = [
     'Saco de 50 kg',
     1245,
     'standard',
+    50,
   ],
   [
     '02',
@@ -44,6 +39,7 @@ export const demoProducts: Product[] = [
     'Saco de 50 kg',
     1395,
     'refined',
+    50,
   ],
   [
     '03',
@@ -53,6 +49,7 @@ export const demoProducts: Product[] = [
     'Saco de 25 kg',
     895,
     'brown',
+    25,
   ],
   [
     '04',
@@ -62,14 +59,16 @@ export const demoProducts: Product[] = [
     'Saco de 20 kg',
     765,
     'glass',
+    20,
   ],
-].map(([id, sku, name, description, presentation, price, image]) => ({
+].map(([id, sku, name, description, presentation, price, image, weight]) => ({
   id: `30000000-0000-4000-8000-0000000000${id}`,
   sku: String(sku),
   name: String(name),
   description: String(description),
   presentation: String(presentation),
   reference_price: Number(price),
+  unit_weight_kg: Number(weight),
   image_url: `/images/sugar-${image}.svg`,
   active: true,
   updated_at: new Date().toISOString(),
@@ -84,11 +83,7 @@ export function createDemoStore(): DemoStore {
     status: Order['status'],
     daysAgo: number,
   ): Order => {
-    const pricing = priceOrder(
-      [{ product_id: demoProducts[0].id, quantity }],
-      demoProducts,
-      demoTiers,
-    );
+    const pricing = priceOrder([{ product_id: demoProducts[0].id, quantity }], demoProducts);
     return {
       id,
       order_number: number,
@@ -98,9 +93,10 @@ export function createDemoStore(): DemoStore {
       fulfillment_type: 'delivery',
       delivery_address: `${demoClient.address}, ${demoClient.city}, ${demoClient.state}, C.P. ${demoClient.postal_code}`,
       reference_subtotal: pricing.subtotal,
-      estimated_discount: pricing.discount,
+      estimated_discount: 0,
       estimated_total: pricing.total,
       confirmed_total: pricing.total,
+      payment_method: 'bank_transfer',
       payment_status: status === 'delivered' ? 'simulated_paid' : 'pending',
       incident_note: null,
       created_at: `${addDays(now, -daysAgo)}T16:30:00Z`,
@@ -121,7 +117,6 @@ export function createDemoStore(): DemoStore {
   return {
     profiles: demoProfiles,
     products: demoProducts,
-    tiers: demoTiers,
     clients: [demoClient],
     orders,
     schedules: [

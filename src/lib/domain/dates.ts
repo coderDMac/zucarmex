@@ -13,10 +13,10 @@ export function addDays(date: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 export function dateLabel(value: string, options?: Intl.DateTimeFormatOptions) {
-  return new Intl.DateTimeFormat(
-    'es-MX',
-    options ?? { day: 'numeric', month: 'short', year: 'numeric' },
-  ).format(new Date(value.length === 10 ? `${value}T12:00:00` : value));
+  return new Intl.DateTimeFormat('es-MX', {
+    ...(options ?? { day: 'numeric', month: 'short', year: 'numeric' }),
+    timeZone: 'America/Mazatlan',
+  }).format(new Date(value.length === 10 ? `${value}T12:00:00Z` : value));
 }
 export function nextDate(date: string, frequency: Frequency) {
   if (frequency !== 'monthly') return addDays(date, frequency === 'weekly' ? 7 : 15);
@@ -41,4 +41,13 @@ export function validateFutureDate(date: string) {
     date <= today()
   )
     throw new Error('Selecciona una fecha futura válida.');
+}
+
+export function businessDate(value: string) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mazatlan',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(value));
 }

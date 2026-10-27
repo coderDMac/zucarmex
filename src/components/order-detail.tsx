@@ -26,15 +26,23 @@ import {
   statusLabels,
 } from '@/lib/domain/types';
 import { dateLabel } from '@/lib/domain/dates';
-import { money, roundMoney } from '@/lib/domain/pricing';
+import { confirmationLineTotal, money, roundMoney } from '@/lib/domain/pricing';
 import { api } from '@/lib/api';
 import { Badge, ErrorMessage, Modal, Notice, Reveal, useTask } from './ui';
 import { PageHeading } from './shell';
 import { ScheduleModal } from './recurring';
+import { PaymentOptions } from './payment-options';
+import {
+  itemName,
+  itemPresentation,
+  orderVolume,
+  paymentMethodFor,
+  tonnesLabel,
+} from '@/lib/domain/history';
 function PaymentModal({ order, onClose }: { order: Order; onClose: () => void }) {
   const task = useTask();
   const router = useRouter();
-  const [method, setMethod] = useState<PaymentMethod>('bank_transfer');
+  const [method, setMethod] = useState<PaymentMethod>(order.payment_method ?? 'bank_transfer');
   const [paid, setPaid] = useState(false);
   return (
     <Modal title={paid ? 'Pago registrado' : 'Pago simulado'} onClose={onClose}>
@@ -45,8 +53,8 @@ function PaymentModal({ order, onClose }: { order: Order; onClose: () => void })
           </div>
           <Notice tone="success">Pago registrado para fines demostrativos</Notice>
           <p className="modal-description">
-            No se procesó dinero real. El comprobante demostrativo está disponible en el detalle de
-            tu pedido.
+            No se procesó dinero real. El registro demostrativo está disponible en el detalle de tu
+            pedido.
           </p>
           <button className="button primary full" onClick={onClose}>
             Volver al seguimiento
@@ -63,20 +71,7 @@ function PaymentModal({ order, onClose }: { order: Order; onClose: () => void })
               {money(order.confirmed_total!)} <small style={{ fontSize: 10 }}>MXN</small>
             </strong>
           </div>
-          {Object.entries(paymentLabels).map(([key, label]) => (
-            <label className={`radio-card ${method === key ? 'selected' : ''}`} key={key}>
-              <input
-                type="radio"
-                name="payment-method"
-                checked={method === key}
-                onChange={() => setMethod(key as PaymentMethod)}
-              />
-              <div>
-                <strong>{label}</strong>
-                <p>Método demostrativo, sin movimiento de fondos.</p>
-              </div>
-            </label>
-          ))}
+          <PaymentOptions value={method} onChange={setMethod} disabled={task.pending} />
           <Notice>
             Esta operación es una simulación académica. No ingreses datos bancarios ni de tarjetas.
           </Notice>
@@ -125,14 +120,7 @@ export function OrderDetail({
   const [incident, setIncident] = useState(order.incident_note ?? '');
   const [saved, setSaved] = useState(false);
   const total = roundMoney(
-    order.items.reduce(
-      (s, i) =>
-        s +
-        roundMoney(
-          roundMoney(prices[i.id] || 0) * i.quantity * (1 - i.volume_discount_percent / 100),
-        ),
-      0,
-    ),
+    order.items.reduce((s, i) => s + confirmationLineTotal(i, prices[i.id] || 0), 0),
   );
   const confirmedStages = ['confirmed', 'preparing', 'ready', 'delivered'];
   const canPay =
@@ -140,6 +128,8 @@ export function OrderDetail({
     order.confirmed_total !== null &&
     order.payment_status === 'pending';
   const client = data.clients.find((c) => c.id === order.client_id);
+  const selectedMethod = paymentMethodFor(order, data.payments);
+  const volume = orderVolume(order.items);
   const recorded = data.payments.find((p) => p.order_id === order.id);
   const closed = ['delivered', 'cancelled'].includes(order.status);
   if (created && !admin)
@@ -248,6 +238,10 @@ export function OrderDetail({
                 </strong>
               </div>
               <div>
+                <small>Método de pago</small>
+                <strong>{selectedMethod ? paymentLabels[selectedMethod] : 'Por definir'}</strong>
+              </div>
+              <div>
                 <small>Estado del pago</small>
                 <strong>
                   {order.payment_status === 'simulated_paid'
@@ -277,7 +271,7 @@ export function OrderDetail({
                   <tr>
                     <th>Producto / cantidad</th>
                     <th>Referencia</th>
-                    <th>Beneficio</th>
+                    <th>Volumen</th>
                     <th>
                       {admin
                         ? 'Precio confirmado / saco'
@@ -291,17 +285,17 @@ export function OrderDetail({
                   {order.items.map((i) => (
                     <tr key={i.id}>
                       <td className="table-product">
-                        <strong>
-                          {data.products.find((p) => p.id === i.product_id)?.name ??
-                            'Producto demo'}
-                        </strong>
+                        <strong>{itemName(i, data.products)}</strong>
                         <small>
-                          {i.quantity} sacos ·{' '}
-                          {data.products.find((p) => p.id === i.product_id)?.presentation}
+                          {i.quantity} unidades · {itemPresentation(i, data.products)}
                         </small>
                       </td>
                       <td>{money(i.reference_unit_price)}</td>
-                      <td>{i.volume_discount_percent}%</td>
+                      <td>
+                        {i.unit_weight_kg === null || i.unit_weight_kg === undefined
+                          ? 'Peso no registrado'
+                          : tonnesLabel(orderVolume([i]).tonnes)}
+                      </td>
                       <td>
                         {admin ? (
                           <input
@@ -329,8 +323,8 @@ export function OrderDetail({
             </div>
             <div style={{ padding: '15px 22px' }}>
               <p className="subtle">
-                Los precios de referencia corresponden al momento de la solicitud. Los descuentos se
-                conservan como parte de esta estimación.
+                Los precios y las presentaciones corresponden al momento de la solicitud. El importe
+                confirmado conserva las condiciones comerciales del pedido.
               </p>
             </div>
           </Reveal>
@@ -343,8 +337,8 @@ export function OrderDetail({
                 Gestión de la solicitud
               </div>
               <p className="subtle" style={{ margin: '9px 0 20px' }}>
-                Confirma disponibilidad y revisa el precio por saco. Se aplican los beneficios
-                registrados al solicitar.
+                Confirma disponibilidad y revisa el precio por unidad. Las condiciones comerciales
+                se acuerdan para cada pedido.
               </p>
               <form
                 onSubmit={(e) => {
@@ -434,10 +428,7 @@ export function OrderDetail({
                 <span>Subtotal de referencia</span>
                 <strong>{money(order.reference_subtotal)}</strong>
               </div>
-              <div className="summary-line saving">
-                <span>Descuento estimado</span>
-                <strong>− {money(order.estimated_discount)}</strong>
-              </div>
+
               <div className="summary-line">
                 <span>Total estimado</span>
                 <strong>{money(order.estimated_total)}</strong>
@@ -452,6 +443,14 @@ export function OrderDetail({
               ) : (
                 <Notice>El precio final está pendiente de confirmación por ZUCARMEX.</Notice>
               )}
+              <div className="payment-method-summary">
+                <span className="summary-label">Método de pago seleccionado</span>
+                <strong>{selectedMethod ? paymentLabels[selectedMethod] : 'Por definir'}</strong>
+                <p>
+                  {tonnesLabel(volume.tonnes)} · {volume.units} unidades
+                  {volume.unweighedUnits ? ' · volumen parcial' : ''}
+                </p>
+              </div>
               {order.payment_status === 'simulated_paid' ? (
                 <>
                   <div className="payment-success">

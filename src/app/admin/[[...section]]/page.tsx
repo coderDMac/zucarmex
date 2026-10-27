@@ -1,10 +1,16 @@
 import { notFound } from 'next/navigation';
 import { requireRole } from '@/lib/auth';
 import { getPortalData } from '@/lib/data/repository';
-import { AdminDashboard, AdminProducts, AdminClients, AdminBenefits } from '@/components/admin';
+import { AdminDashboard, AdminProducts, AdminClients } from '@/components/admin';
 import { OrderList } from '@/components/order-list';
 import { OrderDetail } from '@/components/order-detail';
-export default async function AdminPage({ params }: { params: Promise<{ section?: string[] }> }) {
+export default async function AdminPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ section?: string[] }>;
+  searchParams: Promise<{ client?: string }>;
+}) {
   await requireRole('admin');
   const data = await getPortalData();
   const { section = [] } = await params;
@@ -17,9 +23,17 @@ export default async function AdminPage({ params }: { params: Promise<{ section?
     return <OrderDetail key={order.id} data={data} order={order} admin />;
   }
   if (id) notFound();
-  if (page === 'pedidos') return <OrderList data={data} admin />;
+  if (page === 'pedidos') {
+    const query = await searchParams;
+    return (
+      <OrderList
+        data={data}
+        admin
+        initialClientId={typeof query.client === 'string' ? query.client : ''}
+      />
+    );
+  }
   if (page === 'productos') return <AdminProducts data={data} />;
   if (page === 'clientes') return <AdminClients data={data} />;
-  if (page === 'beneficios') return <AdminBenefits data={data} />;
   notFound();
 }

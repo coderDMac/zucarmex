@@ -37,18 +37,16 @@ export interface Product {
   presentation: string;
   image_url: string;
   reference_price: number;
+  unit_weight_kg: number | null;
   active: boolean;
   updated_at: string;
-}
-export interface Tier {
-  id: number;
-  min_quantity: number;
-  max_quantity: number | null;
-  discount_percent: number;
 }
 export interface OrderItem {
   id: string;
   product_id: string;
+  product_name: string;
+  product_presentation: string;
+  unit_weight_kg: number | null;
   quantity: number;
   reference_unit_price: number;
   volume_discount_percent: number;
@@ -69,6 +67,7 @@ export interface Order {
   estimated_total: number;
   confirmed_total: number | null;
   payment_status: 'pending' | 'simulated_paid';
+  payment_method: PaymentMethod | null;
   incident_note: string | null;
   created_at: string;
   updated_at: string;
@@ -98,7 +97,6 @@ export interface PortalData {
   profile: Profile;
   client: Client | null;
   products: Product[];
-  tiers: Tier[];
   orders: Order[];
   schedules: Schedule[];
   clients: Client[];
@@ -111,6 +109,7 @@ export interface OrderDraft {
   fulfillment_type: Fulfillment;
   delivery_address: string;
   schedule_id?: string;
+  payment_method: PaymentMethod;
 }
 export const statusLabels: Record<OrderStatus, string> = {
   requested: 'Solicitud recibida',
@@ -142,3 +141,9 @@ export const progression: OrderStatus[] = [
 ];
 export const referenceNotice =
   'El precio mostrado es de referencia. ZUCARMEX confirmará disponibilidad, precio final y condiciones comerciales al procesar la solicitud.';
+
+export const paymentDescriptions: Record<PaymentMethod, string> = {
+  bank_transfer: 'Se registra después de confirmar el pedido.',
+  authorized_credit: 'Sujeto a autorización y condiciones comerciales.',
+  point_of_sale: 'Pago en el Punto de Venta, según las condiciones acordadas.',
+};

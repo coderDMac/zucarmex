@@ -10,7 +10,6 @@ import {
   FiHelpCircle,
   FiUser,
   FiUsers,
-  FiPercent,
   FiBell,
   FiSearch,
   FiChevronDown,
@@ -51,12 +50,11 @@ export function Shell({
         { href: '/admin/pedidos', label: 'Pedidos', icon: FiFileText },
         { href: '/admin/productos', label: 'Productos', icon: FiPackage },
         { href: '/admin/clientes', label: 'Clientes', icon: FiUsers },
-        { href: '/admin/beneficios', label: 'Beneficios', icon: FiPercent },
       ]
     : [
         { href: '/portal', label: 'Inicio', icon: FiGrid },
         { href: '/portal/catalogo', label: 'Catálogo de productos', icon: FiPackage },
-        { href: '/portal/pedidos', label: 'Mis pedidos', icon: FiFileText },
+        { href: '/portal/pedidos', label: 'Histórico de pedidos', icon: FiFileText },
         { href: '/portal/recurrentes', label: 'Pedidos recurrentes', icon: FiRepeat },
       ];
   const current = pathname.includes('nuevo-pedido')

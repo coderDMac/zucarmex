@@ -6,34 +6,42 @@ import {
   FiCalendar,
   FiCheck,
   FiClock,
-  FiFileText,
+  FiCreditCard,
   FiInfo,
   FiPackage,
-  FiPercent,
   FiPlus,
   FiRepeat,
   FiSun,
   FiTruck,
 } from 'react-icons/fi';
-import { PortalData, progression, statusLabels } from '@/lib/domain/types';
+import { PortalData, paymentLabels, progression } from '@/lib/domain/types';
 import { dateLabel, today } from '@/lib/domain/dates';
-import { discountFor, volumeHint } from '@/lib/domain/pricing';
+import { money } from '@/lib/domain/pricing';
+import {
+  itemName,
+  orderVolume,
+  paymentMethodFor,
+  purchaseHistory,
+  volumeLabel,
+} from '@/lib/domain/history';
 import { AnimatedPrice, Badge, Empty, Reveal } from './ui';
 import { PageHeading } from './shell';
 import { OrderTable } from './order-table';
+import { HistorySummary } from './history-summary';
 export function Dashboard({ data }: { data: PortalData }) {
-  const product = data.products[0];
-  const last = data.orders.find((o) => o.status === 'delivered') ?? data.orders[0];
-  const active = data.orders.find((o) => !['delivered', 'cancelled'].includes(o.status));
-  const qty = last?.items[0]?.quantity ?? 20;
-  const discount = discountFor(qty, data.tiers);
+  const product = data.products.find((p) => p.active);
+  const history = purchaseHistory(data.orders);
+  const last = history.latest ?? data.orders[0];
+  const active = data.orders.find((order) => !['delivered', 'cancelled'].includes(order.status));
   const due = data.schedules.filter((s) => s.active && s.next_due_date <= today());
+  const lastVolume = last ? orderVolume(last.items) : null;
+  const method = active ? paymentMethodFor(active, data.payments) : null;
   return (
     <>
       <PageHeading
         eyebrow="TU NEGOCIO, SIEMPRE EN MARCHA"
         title={`Buenos días, ${data.client?.business_name ?? data.profile.full_name}`}
-        description="Gestiona tus pedidos y anticipa tu abastecimiento."
+        description="Consulta tus compras, repite pedidos y anticipa tu abastecimiento."
         action={
           <Link href="/portal/nuevo-pedido" className="button primary">
             <FiPlus />
@@ -41,6 +49,7 @@ export function Dashboard({ data }: { data: PortalData }) {
           </Link>
         }
       />
+      <HistorySummary orders={data.orders} />
       <div className="dashboard-grid">
         <Reveal className="card price-hero">
           {product ? (
@@ -51,10 +60,12 @@ export function Dashboard({ data }: { data: PortalData }) {
                   Tu precio de referencia <span className="tiny-badge">DEMO</span>
                 </div>
                 <h2>{product.name}</h2>
-                <div className="presentation">{product.presentation} · Para seguir creando</div>
+                <div className="presentation">
+                  {product.presentation} · Precio vigente de referencia
+                </div>
                 <div className="hero-price">
                   <AnimatedPrice value={product.reference_price} />
-                  <small>MXN / saco</small>
+                  <small>MXN / unidad</small>
                 </div>
                 <div className="hero-updated">
                   <FiClock />
@@ -87,14 +98,21 @@ export function Dashboard({ data }: { data: PortalData }) {
           <div className="card-top">
             <div className="card-title">
               <FiRepeat />
-              Repite y ahorra tiempo
+              {history.latest ? 'Tu última compra' : 'Tu pedido más reciente'}
             </div>
             <FiArrowUpRight className="muted" />
           </div>
           {last ? (
             <>
-              <div className="order-reference">{last.order_number}</div>
-              <div className="reorder-date">Tu último pedido · {dateLabel(last.created_at)}</div>
+              <div className="last-purchase-heading">
+                <div>
+                  <div className="order-reference">{last.order_number}</div>
+                  <div className="reorder-date">
+                    {history.latest ? 'Compra del' : 'Solicitud del'} {dateLabel(last.created_at)}
+                  </div>
+                </div>
+                <strong>{money(last.confirmed_total ?? last.estimated_total)}</strong>
+              </div>
               <div className="reorder-product">
                 <img
                   className="product-thumb"
@@ -106,13 +124,11 @@ export function Dashboard({ data }: { data: PortalData }) {
                 />
                 <div>
                   <strong>
-                    {data.products.find((p) => p.id === last.items[0]?.product_id)?.name ??
-                      'Producto demo'}
+                    {last.items[0] ? itemName(last.items[0], data.products) : 'Productos'}
                   </strong>
                   <small>
-                    {qty} sacos ·{' '}
-                    {data.products.find((p) => p.id === last.items[0]?.product_id)?.presentation}
-                    {last.items.length > 1 ? ` · +${last.items.length - 1} producto(s)` : ''}
+                    {lastVolume?.units} unidades · {lastVolume ? volumeLabel(lastVolume) : '0 t'}
+                    {last.items.length > 1 ? ` · ${last.items.length} productos` : ''}
                   </small>
                 </div>
               </div>
@@ -125,7 +141,7 @@ export function Dashboard({ data }: { data: PortalData }) {
             <Empty title="Tu primera compra">Crea una solicitud para repetirla después.</Empty>
           )}
         </Reveal>
-        <Reveal className="card active-card" delay={0.1}>
+        <Reveal className="card active-card dashboard-active" delay={0.1}>
           <div className="active-heading">
             <div className="card-title">
               <FiPackage />
@@ -137,13 +153,19 @@ export function Dashboard({ data }: { data: PortalData }) {
             <>
               <div className="order-inline">
                 <span className="order-reference">{active.order_number}</span>
-                <small>{active.items.reduce((s, i) => s + i.quantity, 0)} unidades</small>
+                <small>
+                  {orderVolume(active.items).units} unidades ·{' '}
+                  {volumeLabel(orderVolume(active.items))}
+                </small>
               </div>
               <div className="mini-progress">
-                {progression.map((s, i) => {
+                {progression.map((status, i) => {
                   const index = progression.indexOf(active.status);
                   return (
-                    <div key={s} className={i < index ? 'complete' : i === index ? 'current' : ''}>
+                    <div
+                      key={status}
+                      className={i < index ? 'complete' : i === index ? 'current' : ''}
+                    >
                       <i>{i < index ? <FiCheck /> : ''}</i>
                       {
                         [
@@ -159,6 +181,17 @@ export function Dashboard({ data }: { data: PortalData }) {
                   );
                 })}
               </div>
+              <div className="active-payment">
+                <span>
+                  <FiCreditCard />
+                  <strong>{method ? paymentLabels[method] : 'Método de pago por definir'}</strong>
+                </span>
+                <small>
+                  {active.payment_status === 'simulated_paid'
+                    ? 'Pago simulado registrado'
+                    : 'Pago pendiente · disponible después de confirmar'}
+                </small>
+              </div>
               <div className="active-card-bottom">
                 <span>
                   <FiTruck />
@@ -168,7 +201,7 @@ export function Dashboard({ data }: { data: PortalData }) {
                   · {dateLabel(active.requested_date, { day: 'numeric', month: 'short' })}
                 </span>
                 <Link className="text-link" href={`/portal/pedidos/${active.id}`}>
-                  Ver seguimiento <FiArrowRight />
+                  Ver seguimiento y pago <FiArrowRight />
                 </Link>
               </div>
             </>
@@ -176,44 +209,16 @@ export function Dashboard({ data }: { data: PortalData }) {
             <Empty title="Todo al día">Tus próximos pedidos aparecerán aquí.</Empty>
           )}
         </Reveal>
-        <Reveal className="card volume-card" delay={0.14}>
-          <div className="card-title">
-            <FiPercent />
-            Más volumen, más beneficio
-          </div>
-          <span className="benefit-pill">
-            <span className="status-dot" />
-            Beneficio demostrativo
-          </span>
-          <div className="volume-big">
-            <div className="percent-circle">{discount}%</div>
-            <h3>{volumeHint(qty, data.tiers)}</h3>
-          </div>
-          <p>Calculado por producto. Planea tu siguiente compra y aprovecha el volumen.</p>
-          <div className="tier-track">
-            {data.tiers.map((t) => (
-              <span key={t.id} className={qty >= t.min_quantity ? 'filled' : ''} />
-            ))}
-          </div>
-          <div className="tier-labels">
-            {data.tiers.map((t) => (
-              <span key={t.id}>
-                {t.max_quantity ? `${t.min_quantity}–${t.max_quantity}` : `${t.min_quantity}+`}{' '}
-                sacos
-              </span>
-            ))}
-          </div>
-        </Reveal>
       </div>
       <div className="reference-footnote">
         <FiInfo />
         <span>
-          Los precios mostrados son de referencia. El precio final será confirmado por ZUCARMEX al
-          procesar el pedido. Productos, imágenes y descuentos demostrativos.
+          Los precios mostrados son de referencia y pueden variar. ZUCARMEX confirma disponibilidad,
+          precio final y condiciones por pedido. Productos y precios demostrativos.
         </span>
       </div>
       {due.length > 0 ? (
-        <Reveal className="recurring-banner" delay={0.18}>
+        <Reveal className="recurring-banner" delay={0.15}>
           <div className="banner-icon">
             <FiRepeat />
           </div>
@@ -240,13 +245,17 @@ export function Dashboard({ data }: { data: PortalData }) {
         </div>
       )}
       <div className="section-heading">
-        <h2>Tus pedidos recientes</h2>
+        <h2>Tu histórico de pedidos</h2>
         <Link className="text-link" href="/portal/pedidos">
-          Ver todos los pedidos <FiArrowRight />
+          Consultar histórico completo <FiArrowRight />
         </Link>
       </div>
-      <Reveal delay={0.2}>
-        <OrderTable orders={data.orders.slice(0, 3)} products={data.products} />
+      <Reveal delay={0.18}>
+        <OrderTable
+          orders={data.orders.slice(0, 5)}
+          products={data.products}
+          payments={data.payments}
+        />
       </Reveal>
     </>
   );

@@ -1,4 +1,4 @@
-import { OrderDraft, Fulfillment, Product } from './types';
+import { OrderDraft, Fulfillment, Product, paymentLabels } from './types';
 import { validateFutureDate } from './dates';
 export function validateDraft(input: unknown): OrderDraft {
   const data = input as OrderDraft;
@@ -28,6 +28,8 @@ export function validateDraft(input: unknown): OrderDraft {
       data.delivery_address.length > 500)
   )
     throw new Error('Escribe una dirección de entrega válida.');
+  if (!Object.hasOwn(paymentLabels, data.payment_method))
+    throw new Error('Selecciona un método de pago válido.');
   return data;
 }
 export function validateProduct(input: unknown): Omit<Product, 'id' | 'updated_at'> {
@@ -43,6 +45,10 @@ export function validateProduct(input: unknown): Omit<Product, 'id' | 'updated_a
     !Number.isFinite(p.reference_price) ||
     p.reference_price <= 0 ||
     p.reference_price > 1000000 ||
+    !Number.isFinite(p.unit_weight_kg) ||
+    p.unit_weight_kg === null ||
+    p.unit_weight_kg < 0.001 ||
+    p.unit_weight_kg > 100000 ||
     typeof p.active !== 'boolean' ||
     typeof p.description !== 'string' ||
     p.description.length > 1000 ||
@@ -51,7 +57,7 @@ export function validateProduct(input: unknown): Omit<Product, 'id' | 'updated_a
     (p.image_url && !/^\/images\/[\w.-]+$|^https:\/\//.test(p.image_url))
   )
     throw new Error(
-      'Revisa los campos del producto. Usa un precio positivo y una imagen local o HTTPS.',
+      'Revisa los campos del producto. Indica un precio positivo, un peso entre 0.001 y 100,000 kg y una imagen local o HTTPS.',
     );
   return {
     sku: p.sku.trim(),
@@ -60,6 +66,7 @@ export function validateProduct(input: unknown): Omit<Product, 'id' | 'updated_a
     description: p.description,
     image_url: p.image_url,
     reference_price: p.reference_price,
+    unit_weight_kg: Math.round(p.unit_weight_kg * 1000) / 1000,
     active: p.active,
   };
 }

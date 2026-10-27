@@ -88,7 +88,12 @@ const add = (n) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
-const products = await must(db.from('products').select('id,reference_price').eq('id', productId));
+const products = await must(
+  db
+    .from('products')
+    .select('id,name,presentation,unit_weight_kg,reference_price')
+    .eq('id', productId),
+);
 if (!products.length)
   throw new Error('Aplica primero supabase/seed.sql para crear los productos demo.');
 const price = Number(products[0].reference_price);
@@ -100,9 +105,8 @@ const fixtures = [
 for (const [id, number, quantity, status, ago] of fixtures) {
   const prior = await must(db.from('orders').select('id').eq('id', id));
   if (prior.length) continue;
-  const discount = quantity >= 25 ? 4 : 2;
   const subtotal = quantity * price;
-  const total = Math.round(subtotal * (1 - discount / 100) * 100) / 100;
+  const total = Math.round(subtotal * 100) / 100;
   await must(
     db.from('orders').insert({
       id,
@@ -113,9 +117,10 @@ for (const [id, number, quantity, status, ago] of fixtures) {
       fulfillment_type: 'delivery',
       delivery_address: address,
       reference_subtotal: subtotal,
-      estimated_discount: subtotal - total,
+      estimated_discount: 0,
       estimated_total: total,
       confirmed_total: total,
+      payment_method: 'bank_transfer',
       payment_status: status === 'delivered' ? 'simulated_paid' : 'pending',
       created_at: `${add(-ago)}T16:30:00Z`,
     }),
@@ -124,9 +129,12 @@ for (const [id, number, quantity, status, ago] of fixtures) {
     db.from('order_items').insert({
       order_id: id,
       product_id: productId,
+      product_name: products[0].name,
+      product_presentation: products[0].presentation,
+      unit_weight_kg: products[0].unit_weight_kg,
       quantity,
       reference_unit_price: price,
-      volume_discount_percent: discount,
+      volume_discount_percent: 0,
       estimated_line_total: total,
       confirmed_unit_price: price,
       confirmed_line_total: total,
@@ -134,14 +142,12 @@ for (const [id, number, quantity, status, ago] of fixtures) {
   );
   if (status === 'delivered')
     await must(
-      db
-        .from('payments')
-        .insert({
-          order_id: id,
-          payment_method: 'bank_transfer',
-          status: 'simulated_paid',
-          amount: total,
-        }),
+      db.from('payments').insert({
+        order_id: id,
+        payment_method: 'bank_transfer',
+        status: 'simulated_paid',
+        amount: total,
+      }),
     );
 }
 const sid = '50000000-0000-4000-8000-000000000001';

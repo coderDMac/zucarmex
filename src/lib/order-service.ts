@@ -3,9 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { getPortalData } from './data/repository';
 import { mutateDemo } from './data/demo-store';
 import { validateDraft, validateProduct } from './domain/validation';
-import { priceOrder, roundMoney, validateTiers } from './domain/pricing';
+import { confirmationLineTotal, priceOrder, roundMoney } from './domain/pricing';
 import { advanceSchedule, today } from './domain/dates';
-import { Frequency, OrderStatus, PaymentMethod, Product, Tier, statusLabels } from './domain/types';
+import { Frequency, OrderStatus, PaymentMethod, statusLabels } from './domain/types';
 import { supabaseServer } from './supabase/server';
 async function rpc(name: string, args: Record<string, unknown>) {
   const db = await supabaseServer();
@@ -25,9 +25,10 @@ export async function submitOrder(input: unknown) {
       p_fulfillment_type: draft.fulfillment_type,
       p_delivery_address: draft.delivery_address,
       p_schedule_id: draft.schedule_id ?? null,
+      p_payment_method: draft.payment_method,
     });
   return mutateDemo((store) => {
-    const pricing = priceOrder(draft.items, store.products, store.tiers);
+    const pricing = priceOrder(draft.items, store.products);
     const schedule = draft.schedule_id
       ? store.schedules.find((s) => s.id === draft.schedule_id && s.client_id === data.client!.id)
       : null;
@@ -45,10 +46,11 @@ export async function submitOrder(input: unknown) {
       delivery_address:
         draft.fulfillment_type === 'delivery' ? draft.delivery_address.trim() : null,
       reference_subtotal: pricing.subtotal,
-      estimated_discount: pricing.discount,
+      estimated_discount: 0,
       estimated_total: pricing.total,
       confirmed_total: null,
       payment_status: 'pending',
+      payment_method: draft.payment_method,
       incident_note: null,
       created_at: now,
       updated_at: now,
@@ -112,10 +114,8 @@ export async function updateOrder(
           throw new Error('Revisa todos los precios confirmados.');
         if (o.payment_status === 'simulated_paid' && roundMoney(p) !== i.confirmed_unit_price)
           throw new Error('No se puede modificar un precio pagado.');
+        i.confirmed_line_total = confirmationLineTotal(i, p);
         i.confirmed_unit_price = roundMoney(p);
-        i.confirmed_line_total = roundMoney(
-          i.confirmed_unit_price * i.quantity * (1 - i.volume_discount_percent / 100),
-        );
       });
       o.confirmed_total = roundMoney(o.items.reduce((s, i) => s + i.confirmed_line_total!, 0));
     }
@@ -150,6 +150,7 @@ export async function simulatePayment(id: string, method: PaymentMethod) {
       created_at: new Date().toISOString(),
     });
     o.payment_status = 'simulated_paid';
+    o.payment_method = method;
     o.updated_at = new Date().toISOString();
     return pid;
   });
@@ -229,15 +230,6 @@ export async function saveProduct(id: string, input: unknown) {
       if (!p) throw new Error('Producto no encontrado.');
       Object.assign(p, product, { updated_at: new Date().toISOString() });
     }
-  });
-}
-export async function saveTiers(input: Tier[]) {
-  const tiers = validateTiers(input);
-  const data = await getPortalData();
-  if (data.profile.role !== 'admin') throw new Error('Acceso exclusivo de administración.');
-  if (!data.demo) return rpc('update_discount_tiers', { p_tiers: tiers });
-  return mutateDemo((store) => {
-    store.tiers = tiers;
   });
 }
 export async function saveProfile(input: { full_name: string; phone: string }) {

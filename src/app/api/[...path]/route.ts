@@ -9,7 +9,6 @@ import {
   manageSchedule,
   saveProduct,
   saveProfile,
-  saveTiers,
   simulatePayment,
   submitOrder,
   updateOrder,
@@ -99,7 +98,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ pat
       result = await createSchedule(id, body.frequency, body.next_due_date);
     else if (route === 'schedules' && id) result = await manageSchedule(id, body.action);
     else if (route === 'products' && id) result = await saveProduct(id, body);
-    else if (route === 'tiers') result = await saveTiers(body.tiers);
     else if (route === 'profile') result = await saveProfile(body);
     else return NextResponse.json({ error: 'Operación no encontrada.' }, { status: 404 });
     revalidatePath('/portal', 'layout');

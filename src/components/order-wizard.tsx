@@ -6,18 +6,27 @@ import {
   FiArrowLeft,
   FiArrowRight,
   FiCalendar,
+  FiCreditCard,
   FiCheck,
   FiMapPin,
   FiPackage,
   FiSend,
   FiTruck,
 } from 'react-icons/fi';
-import { PortalData, OrderDraft, referenceNotice } from '@/lib/domain/types';
+import {
+  PortalData,
+  OrderDraft,
+  PaymentMethod,
+  paymentLabels,
+  referenceNotice,
+} from '@/lib/domain/types';
 import { addDays, dateLabel, today, validateFutureDate } from '@/lib/domain/dates';
 import { money, priceOrder } from '@/lib/domain/pricing';
 import { api } from '@/lib/api';
 import { ErrorMessage, Notice, Quantity, Reveal, useTask } from './ui';
 import { PageHeading } from './shell';
+import { PaymentOptions } from './payment-options';
+import { orderVolume, tonnesLabel } from '@/lib/domain/history';
 export function OrderWizard({
   data,
   repeatId,
@@ -43,6 +52,7 @@ export function OrderWizard({
         .map((i) => [i.product_id, i.quantity]),
     ),
   );
+  const [method, setMethod] = useState<PaymentMethod>(repeat?.payment_method ?? 'bank_transfer');
   const [date, setDate] = useState(addDays(today(), 1));
   const [fulfillment, setFulfillment] = useState<OrderDraft['fulfillment_type']>(
     source?.fulfillment_type ?? 'pickup',
@@ -54,7 +64,7 @@ export function OrderWizard({
   const items = Object.entries(quantities)
     .filter(([, quantity]) => quantity > 0)
     .map(([product_id, quantity]) => ({ product_id, quantity }));
-  const pricing = priceOrder(items, data.products, data.tiers);
+  const pricing = priceOrder(items, data.products);
   function next() {
     task.setError('');
     try {
@@ -121,7 +131,7 @@ export function OrderWizard({
       <div className="wizard-layout">
         <Reveal className="card wizard-main">
           <div className="steps" aria-label={`Paso ${step + 1} de 4`}>
-            {['Productos', 'Fecha', 'Modalidad', 'Resumen'].map((s, i) => (
+            {['Productos', 'Fecha', 'Entrega y pago', 'Resumen'].map((s, i) => (
               <div
                 key={s}
                 className={`step ${i === step ? 'active' : i < step ? 'done' : ''}`}
@@ -136,8 +146,8 @@ export function OrderWizard({
             <div>
               <h2 className="form-heading">¿Qué necesita tu negocio?</h2>
               <p className="form-subheading">
-                Indica el número de sacos por producto. El beneficio se calcula por volumen de cada
-                producto.
+                Indica la cantidad por producto. El total utiliza el precio de referencia vigente y
+                se confirma al procesar la solicitud.
               </p>
               <div className="wizard-products">
                 {data.products
@@ -155,13 +165,6 @@ export function OrderWizard({
                           <p>
                             {p.presentation} · {money(p.reference_price)} MXN de referencia
                           </p>
-                          <small>
-                            {line?.volume_discount_percent
-                              ? `${line.volume_discount_percent}% de descuento estimado`
-                              : quantities[p.id]
-                                ? 'Sin descuento por volumen'
-                                : 'Producto demo'}
-                          </small>
                         </div>
                         {line && (
                           <span className="wizard-price">{money(line.estimated_line_total)}</span>
@@ -204,7 +207,7 @@ export function OrderWizard({
           )}
           {step === 2 && (
             <div>
-              <h2 className="form-heading">¿Cómo recibirás tu pedido?</h2>
+              <h2 className="form-heading">¿Cómo recibirás y pagarás tu pedido?</h2>
               <p className="form-subheading">Elige la opción que funcione mejor para tu negocio.</p>
               <label className={`radio-card ${fulfillment === 'pickup' ? 'selected' : ''}`}>
                 <input
@@ -246,6 +249,7 @@ export function OrderWizard({
                   </small>
                 </label>
               )}
+              <PaymentOptions value={method} onChange={setMethod} disabled={task.pending} />
             </div>
           )}
           {step === 3 && (
@@ -264,8 +268,8 @@ export function OrderWizard({
                     <div>
                       <strong>{data.products.find((p) => p.id === l.product_id)?.name}</strong>
                       <p className="subtle">
-                        {l.quantity} sacos × {money(l.reference_unit_price)} ·{' '}
-                        {l.volume_discount_percent}% de descuento
+                        {l.quantity} unidades × {money(l.reference_unit_price)} ·{' '}
+                        {tonnesLabel(orderVolume([l]).tonnes)}
                       </p>
                     </div>
                     <strong>{money(l.estimated_line_total)}</strong>
@@ -295,6 +299,19 @@ export function OrderWizard({
                       : 'Entrega en dirección registrada'}
                     {fulfillment === 'delivery' && <p>{address}</p>}
                   </div>
+                </div>
+              </div>
+              <div className="review-section">
+                <h3>
+                  <FiCreditCard />
+                  Método de pago
+                </h3>
+                <div className="review-detail">
+                  {paymentLabels[method]}
+                  <p>
+                    Selección para la solicitud. El pago se registra de forma simulada después de
+                    confirmar.
+                  </p>
                 </div>
               </div>
               <Notice>{referenceNotice}</Notice>
@@ -331,6 +348,7 @@ export function OrderWizard({
                       fulfillment_type: fulfillment,
                       delivery_address: address,
                       schedule_id: scheduleId,
+                      payment_method: method,
                     });
                     router.push(`/portal/pedidos/${result.id}?created=1`);
                     router.refresh();
@@ -350,7 +368,7 @@ export function OrderWizard({
               pricing.lines.map((l) => (
                 <div key={l.product_id} className="summary-mini">
                   <span>{data.products.find((p) => p.id === l.product_id)?.name}</span>
-                  <strong>{l.quantity} sacos</strong>
+                  <strong>{l.quantity} unidades</strong>
                 </div>
               ))
             ) : (
@@ -361,13 +379,18 @@ export function OrderWizard({
             <span>Subtotal de referencia</span>
             <strong>{money(pricing.subtotal)}</strong>
           </div>
-          <div className="summary-line saving">
-            <span>Descuento estimado</span>
-            <strong>− {money(pricing.discount)}</strong>
-          </div>
+
           <div className="summary-line total">
             <span>Total estimado</span>
             <strong>{money(pricing.total)}</strong>
+          </div>
+          <div className="summary-line">
+            <span>Volumen estimado</span>
+            <strong>{tonnesLabel(orderVolume(pricing.lines).tonnes)}</strong>
+          </div>
+          <div className="summary-items">
+            <span className="summary-label">Método de pago</span>
+            <p className="subtle">{paymentLabels[method]}</p>
           </div>
           <Notice>{referenceNotice}</Notice>
         </aside>

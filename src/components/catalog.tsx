@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { FiArrowRight, FiCheck, FiPackage, FiPlus, FiSearch } from 'react-icons/fi';
 import { PortalData } from '@/lib/domain/types';
 import { dateLabel } from '@/lib/domain/dates';
-import { discountFor, money, priceOrder } from '@/lib/domain/pricing';
+import { money, priceOrder } from '@/lib/domain/pricing';
 import { Empty, Notice, Quantity, Reveal } from './ui';
 import { PageHeading } from './shell';
 export function Catalog({ data }: { data: PortalData }) {
@@ -20,7 +20,7 @@ export function Catalog({ data }: { data: PortalData }) {
   const items = Object.entries(basket)
     .filter(([, quantity]) => quantity > 0)
     .map(([product_id, quantity]) => ({ product_id, quantity }));
-  const pricing = priceOrder(items, data.products, data.tiers);
+  const pricing = priceOrder(items, data.products);
   return (
     <>
       <PageHeading
@@ -48,7 +48,6 @@ export function Catalog({ data }: { data: PortalData }) {
       <div className="catalog-grid content-spacer">
         {products.map((p, i) => {
           const qty = quantities[p.id] ?? 1;
-          const discount = discountFor(qty, data.tiers);
           return (
             <Reveal className="card product-card" key={p.id} delay={i * 0.04}>
               <div className="product-image">
@@ -66,7 +65,7 @@ export function Catalog({ data }: { data: PortalData }) {
                 </div>
                 <p className="product-description">{p.description}</p>
                 <div className="product-price">
-                  {money(p.reference_price)} <small>MXN / saco</small>
+                  {money(p.reference_price)} <small>MXN / unidad</small>
                 </div>
                 <div className="product-updated">
                   Precio de referencia ·{' '}
@@ -89,11 +88,6 @@ export function Catalog({ data }: { data: PortalData }) {
                     {added === p.id ? <FiCheck /> : <FiPlus />}
                     {added === p.id ? 'Agregado' : 'Agregar al pedido'}
                   </button>
-                </div>
-                <div className="discount-inline">
-                  {discount
-                    ? `${discount}% de descuento estimado para ${qty} sacos`
-                    : 'A partir de 10 sacos, obtén un beneficio por volumen.'}
                 </div>
               </div>
             </Reveal>

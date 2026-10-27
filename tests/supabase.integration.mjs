@@ -73,6 +73,7 @@ test(
           description: 'Sólo integración',
           presentation: 'Saco de 50 kg',
           reference_price: 1245,
+          unit_weight_kg: 50,
           active: true,
         }),
       );
@@ -85,11 +86,14 @@ test(
       const next = new Date(`${date}T12:00:00Z`);
       next.setUTCDate(next.getUTCDate() + 2);
       const draft = {
-        p_items: [{ product_id: pid, quantity: 25, reference_unit_price: 1 }],
+        p_items: [
+          { product_id: pid, quantity: 25, reference_unit_price: 1, volume_discount_percent: 90 },
+        ],
         p_requested_date: next.toISOString().slice(0, 10),
         p_fulfillment_type: 'delivery',
         p_delivery_address: 'Dirección de prueba 123, Culiacán',
         p_schedule_id: null,
+        p_payment_method: 'authorized_credit',
       };
       await t.test('RLS oculta perfiles y negocios ajenos e impide escalar rol', async () => {
         assert.equal((await good(client.from('profiles').select('*'))).length, 1);
@@ -107,34 +111,44 @@ test(
         assert.ok((await anon.from('products').select('*')).error);
       });
       let oid;
-      await t.test('La RPC ignora precios manipulados y guarda el snapshot con 4%', async () => {
-        oid = await good(client.rpc('submit_order', draft));
-        orders.push(oid);
-        const o = await good(
-          client.from('orders').select('*,items:order_items(*)').eq('id', oid).single(),
-        );
-        assert.equal(o.status, 'requested');
-        assert.equal(o.estimated_total, 29880);
-        assert.equal(o.items[0].reference_unit_price, 1245);
-        assert.equal(o.items[0].volume_discount_percent, 4);
-        assert.ok(
-          (
-            await client
-              .from('orders')
-              .update({ status: 'confirmed', confirmed_total: 1 })
-              .eq('id', oid)
-          ).error,
-        );
-        assert.equal((await good(other.from('orders').select('*').eq('id', oid))).length, 0);
-        assert.ok(
-          (await other.rpc('simulate_payment', { p_order_id: oid, p_method: 'bank_transfer' }))
-            .error,
-        );
-        assert.ok(
-          (await client.rpc('simulate_payment', { p_order_id: oid, p_method: 'bank_transfer' }))
-            .error,
-        );
-      });
+      await t.test(
+        'La RPC guarda referencia, peso y método sin descuentos automáticos',
+        async () => {
+          oid = await good(client.rpc('submit_order', draft));
+          orders.push(oid);
+          const o = await good(
+            client.from('orders').select('*,items:order_items(*)').eq('id', oid).single(),
+          );
+          assert.equal(o.status, 'requested');
+          assert.equal(o.estimated_total, 31125);
+          assert.equal(o.estimated_discount, 0);
+          assert.equal(o.payment_method, 'authorized_credit');
+          assert.equal(o.items[0].unit_weight_kg, 50);
+          assert.equal(o.items[0].product_name, 'Producto de prueba');
+          assert.equal(o.items[0].reference_unit_price, 1245);
+          assert.equal(o.items[0].volume_discount_percent, 0);
+          assert.ok(
+            (await client.rpc('submit_order', { ...draft, p_payment_method: 'stripe' })).error,
+          );
+          assert.ok(
+            (
+              await client
+                .from('orders')
+                .update({ status: 'confirmed', confirmed_total: 1 })
+                .eq('id', oid)
+            ).error,
+          );
+          assert.equal((await good(other.from('orders').select('*').eq('id', oid))).length, 0);
+          assert.ok(
+            (await other.rpc('simulate_payment', { p_order_id: oid, p_method: 'bank_transfer' }))
+              .error,
+          );
+          assert.ok(
+            (await client.rpc('simulate_payment', { p_order_id: oid, p_method: 'bank_transfer' }))
+              .error,
+          );
+        },
+      );
       await t.test(
         'Sólo el administrador confirma y el cliente observa el precio final',
         async () => {
@@ -154,8 +168,25 @@ test(
           );
           const o = await good(client.from('orders').select('*').eq('id', oid).single());
           assert.equal(o.status, 'confirmed');
-          assert.equal(o.confirmed_total, 29760);
-          await good(admin.from('products').update({ reference_price: 1300 }).eq('id', pid));
+          assert.equal(o.confirmed_total, 31000);
+          await good(
+            admin.rpc('admin_update_order', { p_id: oid, p_status: 'preparing', p_prices: prices }),
+          );
+          assert.equal(
+            (await good(client.from('orders').select('confirmed_total').eq('id', oid).single()))
+              .confirmed_total,
+            31000,
+          );
+          await good(
+            admin
+              .from('products')
+              .update({
+                reference_price: 1300,
+                unit_weight_kg: 25,
+                name: 'Presentación actualizada',
+              })
+              .eq('id', pid),
+          );
           assert.equal(
             (await good(client.from('order_items').select('*').eq('order_id', oid)))[0]
               .reference_unit_price,
@@ -175,7 +206,12 @@ test(
           assert.equal(p1, p2);
           const p = await good(client.from('payments').select('*').eq('order_id', oid));
           assert.equal(p.length, 1);
-          assert.equal(p[0].amount, 29760);
+          assert.equal(p[0].amount, 31000);
+          assert.equal(
+            (await good(client.from('orders').select('payment_method').eq('id', oid).single()))
+              .payment_method,
+            'bank_transfer',
+          );
           assert.equal(
             (await good(client.from('orders').select('*').eq('id', oid).single())).payment_status,
             'simulated_paid',
@@ -189,6 +225,64 @@ test(
                 p_prices: Object.fromEntries(items.map((i) => [i.id, 1])),
               })
             ).error,
+          );
+        },
+      );
+      await t.test(
+        'Los importes históricos confirmados permanecen intactos al avanzar de estado',
+        async () => {
+          const legacyId = await good(client.rpc('submit_order', draft));
+          orders.push(legacyId);
+          await good(
+            root
+              .from('order_items')
+              .update({
+                confirmed_unit_price: 1245,
+                confirmed_line_total: 29880,
+                volume_discount_percent: 4,
+              })
+              .eq('order_id', legacyId),
+          );
+          await good(
+            root
+              .from('orders')
+              .update({ status: 'confirmed', confirmed_total: 29880 })
+              .eq('id', legacyId),
+          );
+          const items = await good(admin.from('order_items').select('id').eq('order_id', legacyId));
+          const prices = Object.fromEntries(items.map((item) => [item.id, 1245]));
+          await good(
+            admin.rpc('admin_update_order', {
+              p_id: legacyId,
+              p_status: 'preparing',
+              p_prices: prices,
+            }),
+          );
+          assert.equal(
+            (
+              await good(
+                client.from('orders').select('confirmed_total').eq('id', legacyId).single(),
+              )
+            ).confirmed_total,
+            29880,
+          );
+          await good(
+            client.rpc('simulate_payment', { p_order_id: legacyId, p_method: 'point_of_sale' }),
+          );
+          await good(
+            admin.rpc('admin_update_order', {
+              p_id: legacyId,
+              p_status: 'ready',
+              p_prices: prices,
+            }),
+          );
+          assert.equal(
+            (
+              await good(
+                client.from('orders').select('confirmed_total').eq('id', legacyId).single(),
+              )
+            ).confirmed_total,
+            29880,
           );
         },
       );
@@ -214,7 +308,19 @@ test(
           const newOrder = await good(client.from('orders').select('*').eq('id', newId).single());
           assert.equal(newOrder.status, 'requested');
           assert.equal(newOrder.confirmed_total, null);
-          assert.equal(newOrder.estimated_total, 31200);
+          assert.equal(newOrder.estimated_total, 32500);
+          const snapshots = await good(
+            client
+              .from('order_items')
+              .select('order_id,unit_weight_kg,product_name')
+              .in('order_id', [oid, newId]),
+          );
+          assert.equal(snapshots.find((i) => i.order_id === oid).unit_weight_kg, 50);
+          assert.equal(
+            snapshots.find((i) => i.order_id === oid).product_name,
+            'Producto de prueba',
+          );
+          assert.equal(snapshots.find((i) => i.order_id === newId).unit_weight_kg, 25);
           assert.ok(
             (await client.rpc('submit_order', { ...draft, p_schedule_id: schedules[1] })).error,
           );
@@ -229,20 +335,10 @@ test(
         },
       );
       await t.test(
-        'Los rangos inválidos y el acceso comercial de clientes se rechazan',
+        'Se retira la configuración de beneficios y se respeta la disponibilidad',
         async () => {
-          const tiers = await good(
-            client.from('volume_discount_tiers').select('*').order('min_quantity'),
-          );
-          assert.ok((await client.rpc('update_discount_tiers', { p_tiers: tiers })).error);
-          assert.ok(
-            (
-              await admin.rpc('update_discount_tiers', {
-                p_tiers: tiers.map((v, i) => (i === 1 ? { ...v, min_quantity: 9 } : v)),
-              })
-            ).error,
-          );
-          await good(admin.rpc('update_discount_tiers', { p_tiers: tiers }));
+          assert.ok((await client.from('volume_discount_tiers').select('*')).error);
+          assert.ok((await admin.rpc('update_discount_tiers', { p_tiers: [] })).error);
           await good(admin.from('products').update({ active: false }).eq('id', pid));
           assert.equal((await good(client.from('products').select('*').eq('id', pid))).length, 0);
           assert.ok((await client.rpc('submit_order', draft)).error);

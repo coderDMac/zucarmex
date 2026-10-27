@@ -1,7 +1,7 @@
 import 'server-only';
 import { cache } from 'react';
 import { session } from '@/lib/auth';
-import { PortalData, Order, Schedule, Client, Payment, Product, Tier } from '@/lib/domain/types';
+import { PortalData, Order, Schedule, Client, Payment, Product } from '@/lib/domain/types';
 import { supabaseServer } from '@/lib/supabase/server';
 import { readDemo } from './demo-store';
 export const getPortalData = cache(async (): Promise<PortalData> => {
@@ -30,7 +30,6 @@ export const getPortalData = cache(async (): Promise<PortalData> => {
   const results = await Promise.all([
     db.from('clients').select('*').order('business_name'),
     db.from('products').select('*').order('sku'),
-    db.from('volume_discount_tiers').select('*').order('min_quantity'),
     db.from('orders').select('*,items:order_items(*)').order('created_at', { ascending: false }),
     db
       .from('recurring_schedules')
@@ -42,13 +41,12 @@ export const getPortalData = cache(async (): Promise<PortalData> => {
     throw new Error(
       'No se pudieron cargar los datos. Verifica la conexión y las migraciones de Supabase.',
     );
-  const [clients, products, tiers, orders, schedules, payments] = results.map((r) => r.data ?? []);
+  const [clients, products, orders, schedules, payments] = results.map((r) => r.data ?? []);
   return {
     profile: auth.profile,
     client: (clients as Client[]).find((c) => c.profile_id === auth.profile.id) ?? null,
     clients: clients as Client[],
     products: products as Product[],
-    tiers: tiers as Tier[],
     orders: orders as unknown as Order[],
     schedules: schedules as unknown as Schedule[],
     payments: payments as Payment[],

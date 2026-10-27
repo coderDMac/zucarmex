@@ -3031,3 +3031,255 @@ select.field-input {
     visibility: visible;
   }
 }
+
+/* Histórico de compras y marca proporcionada por ZUCARMEX. */
+.brand {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+}
+.brand img {
+  width: 181px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+.brand small {
+  margin: 0;
+  font-size: 8px;
+  letter-spacing: 2.5px;
+}
+.brand-light img {
+  width: 218px;
+}
+.history-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0 0 24px;
+}
+.history-metric {
+  padding: 19px 20px;
+}
+.history-metric-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: #697e5c;
+  font-size: 11px;
+}
+.history-metric-label svg {
+  font-size: 16px;
+}
+.history-metric-value {
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  margin-top: 13px;
+  line-height: 1.4;
+}
+.history-metric:last-child .history-metric-value {
+  font-size: 19px;
+  padding-block: 4px;
+}
+.history-metric p {
+  font-size: 10px;
+  margin-top: 5px;
+}
+.last-purchase-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.last-purchase-heading > strong {
+  font-family: var(--display);
+  color: var(--green);
+  font-size: 19px;
+  letter-spacing: -0.6px;
+}
+.dashboard-active {
+  grid-column: 1 / -1;
+}
+.active-payment {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  padding: 13px 15px;
+  background: #f7f9f3;
+  border: 1px solid #e9eedf;
+  border-radius: 8px;
+  margin: -4px 0 17px;
+}
+.active-payment > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--green);
+  font-size: 11px;
+}
+.active-payment strong {
+  font-weight: 500;
+}
+.active-payment small {
+  font-size: 10px;
+  color: #879779;
+}
+.history-filters {
+  padding: 17px 19px;
+  display: flex;
+  align-items: flex-end;
+  gap: 15px;
+  margin: 0 0 22px;
+}
+.history-filters .search-field {
+  margin-bottom: 0;
+  flex: 1;
+  align-self: flex-end;
+  min-width: 150px;
+}
+.history-filters .field {
+  margin-bottom: 0;
+  min-width: 135px;
+  font-size: 10px;
+}
+.history-filters .field input,
+.history-filters .field select {
+  min-height: 39px;
+  padding: 9px 10px;
+  font-size: 11px;
+}
+.history-note {
+  font-size: 10px;
+  line-height: 1.8;
+  margin: -8px 0 23px;
+}
+.table-subline {
+  font-size: 9px;
+  margin-top: 4px;
+  font-weight: 400;
+}
+.payment-options {
+  border: 0;
+  padding: 0;
+  margin: 24px 0 0;
+}
+.payment-options legend {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.payment-options .radio-card {
+  padding: 14px 16px;
+}
+.payment-method-summary {
+  border-top: 1px solid var(--border);
+  margin-top: 17px;
+  padding-top: 2px;
+}
+.payment-method-summary strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+}
+.payment-method-summary p {
+  font-size: 10px;
+  margin-top: 7px;
+}
+.modal .payment-options {
+  margin-top: 0;
+}
+@media (max-width: 1200px) {
+  .history-summary {
+    gap: 11px;
+  }
+  .history-metric {
+    padding: 17px 15px;
+  }
+  .history-metric-value {
+    font-size: 21px;
+  }
+  .history-metric:last-child .history-metric-value {
+    font-size: 16px;
+  }
+  .history-metric-label {
+    font-size: 10px;
+  }
+  .history-filters {
+    flex-wrap: wrap;
+  }
+  .history-filters .search-field {
+    max-width: none;
+  }
+}
+@media (max-width: 1000px) {
+  .history-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-active {
+    grid-row: auto;
+  }
+  .active-payment {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+}
+@media (max-width: 480px) {
+  .history-summary {
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .history-metric {
+    padding: 15px 13px;
+  }
+  .history-metric-value {
+    font-size: 23px;
+  }
+  .history-metric:last-child .history-metric-value {
+    font-size: 17px;
+  }
+  .history-metric p {
+    font-size: 9px;
+  }
+  .history-metric-label svg {
+    font-size: 13px;
+  }
+  .history-filters {
+    padding: 15px;
+    gap: 12px;
+  }
+  .history-filters .search-field {
+    flex-basis: 100%;
+  }
+  .history-filters .field {
+    flex: 1;
+    min-width: 110px;
+  }
+  .last-purchase-heading > strong {
+    font-size: 21px;
+  }
+  .active-payment small {
+    font-size: 9px;
+  }
+}
+.hero-bag {
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+.price-hero .hero-content {
+  max-width: calc(100% - 165px);
+}
+@media (max-width: 480px) {
+  .price-hero .hero-content {
+    max-width: 65%;
+  }
+  .hero-bag {
+    width: 170px;
+    right: -25px;
+    top: 35px;
+  }
+}

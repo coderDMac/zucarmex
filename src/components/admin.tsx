@@ -14,12 +14,15 @@ import {
   FiShield,
   FiUsers,
 } from 'react-icons/fi';
-import { PortalData, Product, Tier } from '@/lib/domain/types';
+import { PortalData, Product } from '@/lib/domain/types';
 import { money } from '@/lib/domain/pricing';
 import { api } from '@/lib/api';
 import { PageHeading } from './shell';
 import { Empty, ErrorMessage, Modal, Notice, Reveal, useTask } from './ui';
 import { OrderTable } from './order-table';
+import { HistorySummary } from './history-summary';
+import { purchaseHistory, volumeLabel } from '@/lib/domain/history';
+import { dateLabel } from '@/lib/domain/dates';
 export function AdminDashboard({ data }: { data: PortalData }) {
   const kpis = [
     {
@@ -54,6 +57,7 @@ export function AdminDashboard({ data }: { data: PortalData }) {
         title="Todo listo para acompañar a tus clientes"
         description="Una vista sencilla para atender las solicitudes de tu Punto de Venta."
       />
+      <HistorySummary orders={data.orders} admin />
       <div className="kpi-grid">
         {kpis.map((k, i) => (
           <Reveal key={k.title} className="card kpi" delay={i * 0.04}>
@@ -67,8 +71,8 @@ export function AdminDashboard({ data }: { data: PortalData }) {
         ))}
       </div>
       <Notice>
-        Configuración demostrativa. Los productos, precios, clientes y beneficios son ficticios. En
-        una implementación empresarial, SAP seguiría siendo la fuente de verdad operativa.
+        Configuración demostrativa. Los productos, precios y clientes son ficticios. En una
+        implementación empresarial, SAP seguiría siendo la fuente de verdad operativa.
       </Notice>
       <div className="section-heading">
         <h2>Solicitudes recientes</h2>
@@ -81,6 +85,7 @@ export function AdminDashboard({ data }: { data: PortalData }) {
         orders={data.orders.slice(0, 6)}
         products={data.products}
         clients={data.clients}
+        payments={data.payments}
       />
     </>
   );
@@ -106,6 +111,7 @@ function ProductModal({ product, onClose }: { product: Partial<Product>; onClose
               description: f.get('description'),
               image_url: f.get('image_url'),
               reference_price: Number(f.get('reference_price')),
+              unit_weight_kg: Number(f.get('unit_weight_kg')),
               active: f.get('active') === 'on',
             });
             onClose();
@@ -144,6 +150,19 @@ function ProductModal({ product, onClose }: { product: Partial<Product>; onClose
             required
             maxLength={100}
           />
+        </label>
+        <label className="field">
+          Peso por unidad (kg)
+          <input
+            name="unit_weight_kg"
+            type="number"
+            min="0.001"
+            max="100000"
+            step="0.001"
+            required
+            defaultValue={product.unit_weight_kg ?? ''}
+          />
+          <small>Se guarda en cada nuevo pedido para calcular las toneladas del histórico.</small>
         </label>
         <label className="field">
           Descripción
@@ -288,7 +307,7 @@ export function AdminClients({ data }: { data: PortalData }) {
       <PageHeading
         eyebrow="NEGOCIOS QUE ACOMPAÑAMOS"
         title="Clientes"
-        description="Consulta los negocios vinculados al Punto de Venta Culiacán."
+        description="Consulta sus compras entregadas, montos vendidos, toneladas y última compra."
       />
       <div className="toolbar">
         <div className="search-field">
@@ -310,41 +329,66 @@ export function AdminClients({ data }: { data: PortalData }) {
                 <th>Negocio</th>
                 <th>Contacto</th>
                 <th>Ubicación</th>
-                <th>Pedidos</th>
+                <th>Compras / pedidos</th>
+                <th>Monto vendido</th>
+                <th>Toneladas vendidas</th>
+                <th>Última compra</th>
                 <th>Estado</th>
               </tr>
             </thead>
             <tbody>
-              {clients.map((c) => (
-                <tr key={c.id}>
-                  <td>
-                    <div className="client-business">
-                      <span className="avatar">
-                        {c.business_name
-                          .split(' ')
-                          .slice(0, 2)
-                          .map((w) => w[0])
-                          .join('')}
-                      </span>
-                      <div>
-                        <strong>{c.business_name}</strong>
-                        <small>{c.tax_name || 'Negocio demo'}</small>
+              {clients.map((c) => {
+                const clientOrders = data.orders.filter((o) => o.client_id === c.id);
+                const history = purchaseHistory(clientOrders);
+                return (
+                  <tr key={c.id}>
+                    <td>
+                      <div className="client-business">
+                        <span className="avatar">
+                          {c.business_name
+                            .split(' ')
+                            .slice(0, 2)
+                            .map((w) => w[0])
+                            .join('')}
+                        </span>
+                        <div>
+                          <Link className="text-link" href={`/admin/pedidos?client=${c.id}`}>
+                            {c.business_name} <FiArrowRight />
+                          </Link>
+                          <small>{c.tax_name || 'Negocio demo'}</small>
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td>{c.phone}</td>
-                  <td>
-                    {c.city}, {c.state}
-                  </td>
-                  <td>{data.orders.filter((o) => o.client_id === c.id).length}</td>
-                  <td>
-                    <span className={`badge ${c.active ? 'status-confirmed' : ''}`}>
-                      <span className="status-dot" />
-                      {c.active ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>{c.phone}</td>
+                    <td>
+                      {c.city}, {c.state}
+                    </td>
+                    <td>
+                      {history.count} compras
+                      <div className="subtle table-subline">
+                        {clientOrders.length} pedidos registrados
+                      </div>
+                    </td>
+                    <td className="table-total">{money(history.amount)}</td>
+                    <td>
+                      {volumeLabel(history)}
+                      {history.unweighedUnits > 0 && <div className="subtle">Volumen parcial</div>}
+                    </td>
+                    <td>
+                      {history.latest ? dateLabel(history.latest.created_at) : 'Sin compras'}
+                      {history.latest && (
+                        <div className="subtle table-subline">{history.latest.order_number}</div>
+                      )}
+                    </td>
+                    <td>
+                      <span className={`badge ${c.active ? 'status-confirmed' : ''}`}>
+                        <span className="status-dot" />
+                        {c.active ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {!clients.length && (
@@ -353,118 +397,6 @@ export function AdminClients({ data }: { data: PortalData }) {
             </Empty>
           )}
         </div>
-      </div>
-    </>
-  );
-}
-export function AdminBenefits({ data }: { data: PortalData }) {
-  const router = useRouter();
-  const task = useTask();
-  const [tiers, setTiers] = useState<Tier[]>(data.tiers);
-  const [saved, setSaved] = useState(false);
-  function update(index: number, key: keyof Tier, value: number | null) {
-    setTiers(tiers.map((t, i) => (i === index ? { ...t, [key]: value } : t)));
-    setSaved(false);
-  }
-  return (
-    <>
-      <PageHeading
-        eyebrow="CONFIGURACIÓN DEMOSTRATIVA"
-        title="Beneficios por volumen"
-        description="Ajusta los rangos que se utilizan en las estimaciones del portal."
-      />
-      <div className="benefit-config">
-        <Notice tone="warning">
-          Configuración demostrativa. Estos descuentos no representan políticas comerciales reales
-          de ZUCARMEX. El beneficio se calcula por cantidad de cada producto.
-        </Notice>
-        <form
-          className="card table-card content-spacer"
-          onSubmit={(e) => {
-            e.preventDefault();
-            task.run(async () => {
-              await api('tiers', { tiers });
-              setSaved(true);
-              router.refresh();
-            });
-          }}
-        >
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Desde (unidades)</th>
-                  <th>Hasta (unidades)</th>
-                  <th>Descuento estimado (%)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tiers.map((t, i) => (
-                  <tr key={t.id}>
-                    <td>
-                      <input
-                        aria-label={`Cantidad mínima del rango ${i + 1}`}
-                        type="number"
-                        min={1}
-                        step={1}
-                        required
-                        value={t.min_quantity}
-                        onChange={(e) => update(i, 'min_quantity', Number(e.target.value))}
-                      />
-                    </td>
-                    <td>
-                      {i === tiers.length - 1 ? (
-                        <span className="subtle">Sin límite</span>
-                      ) : (
-                        <input
-                          aria-label={`Cantidad máxima del rango ${i + 1}`}
-                          type="number"
-                          min={1}
-                          step={1}
-                          required
-                          value={t.max_quantity ?? ''}
-                          onChange={(e) => update(i, 'max_quantity', Number(e.target.value))}
-                        />
-                      )}
-                    </td>
-                    <td>
-                      <input
-                        aria-label={`Descuento del rango ${i + 1}`}
-                        type="number"
-                        min={0}
-                        max={100}
-                        step="0.01"
-                        required
-                        value={t.discount_percent}
-                        onChange={(e) => update(i, 'discount_percent', Number(e.target.value))}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div style={{ padding: '0 22px' }}>
-            <ErrorMessage message={task.error} />
-            {saved && (
-              <div style={{ marginBottom: 15 }}>
-                <Notice tone="success">
-                  Beneficios actualizados. Los nuevos pedidos usarán esta configuración.
-                </Notice>
-              </div>
-            )}
-          </div>
-          <div className="config-footer">
-            <p>
-              Los rangos deben ser continuos, sin traslapes y con descuentos crecientes. No modifica
-              pedidos ya solicitados.
-            </p>
-            <button className="button primary" disabled={task.pending}>
-              {task.pending ? 'Guardando…' : 'Guardar configuración'}
-              <FiCheck />
-            </button>
-          </div>
-        </form>
       </div>
     </>
   );

@@ -8,7 +8,7 @@ El negocio ficticio de la demostración es **Panadería La Espiga**. La metodolo
 
 Next.js 16 con App Router, React, TypeScript estricto, CSS nativo, Framer Motion, GSAP, React Icons, Supabase PostgreSQL, Supabase Auth y RLS. No usa frameworks de componentes ni pasarelas de pago.
 
-Framer Motion anima tarjetas, cambios de vista y modales. GSAP anima únicamente la cifra de referencia del dashboard. Se respeta la preferencia de movimiento reducido. El tema está centralizado en `src/app/globals.css`; los colores y el identificador tipográfico son una propuesta visual para el prototipo, no un manual de marca oficial.
+Framer Motion anima tarjetas, cambios de vista y modales. GSAP anima únicamente la cifra de referencia del dashboard. Se respeta la preferencia de movimiento reducido. El tema está centralizado en `src/app/globals.css`. Los logotipos negro y blanco proporcionados por el equipo de ZUCARMEX se conservan sin alterar en `public/branding/` y se usan en la navegación y el acceso. Los colores de la interfaz siguen siendo una propuesta visual para el prototipo, no un manual de marca oficial.
 
 ## Instalación y ejecución
 
@@ -49,7 +49,7 @@ supabase start
 supabase status
 ```
 
-La CLI aplica `supabase/migrations/202610230001_portal.sql` y `supabase/seed.sql` al crear la instancia. Los puertos locales son 54321 (API), 54322 (PostgreSQL) y 54323 (Studio).
+La CLI aplica todas las migraciones de `supabase/migrations/` en orden y después `supabase/seed.sql` al crear la instancia. Los puertos locales son 54321 (API), 54322 (PostgreSQL) y 54323 (Studio).
 
 Para una instancia ligera que sólo necesita PostgreSQL, Auth y REST:
 
@@ -91,7 +91,7 @@ Revisa el esquema y las migraciones pendientes antes de aplicar cambios. `supaba
 Para un proyecto nuevo también puedes realizar la preparación manualmente:
 
 1. Crea un proyecto de Supabase.
-2. En SQL Editor ejecuta primero el contenido de `supabase/migrations/202610230001_portal.sql`.
+2. En SQL Editor ejecuta las migraciones en orden: `202610230001_portal.sql`, `20261027180000_feedback.sql` y `20261027183000_catalog_weights.sql`.
 3. Ejecuta después `supabase/seed.sql`.
 4. En Authentication habilita el proveedor Email y deshabilita el registro público. Los usuarios se crean con el script administrativo.
 5. Configura Site URL con tu origen de desarrollo (`http://localhost:3000`) o despliegue. El flujo actual usa correo/contraseña; no necesita OAuth ni enlaces de confirmación.
@@ -104,14 +104,16 @@ Consulta las [instrucciones oficiales de autenticación SSR de Supabase](https:/
 
 ## Seed y usuarios demo
 
-`supabase/seed.sql` crea cuatro productos ficticios y estas reglas demostrativas, por cantidad de **cada producto**:
+`supabase/seed.sql` crea cuatro productos ficticios con precio de referencia y peso por presentación:
 
-| Unidades | Descuento estimado |
-| -------- | ------------------ |
-| 1–9      | 0%                 |
-| 10–24    | 2%                 |
-| 25–49    | 4%                 |
-| 50 o más | 6%                 |
+| Producto demo    | Presentación / peso por unidad |
+| ---------------- | ------------------------------ |
+| Azúcar estándar  | Saco de 50 kg                  |
+| Azúcar refinada  | Saco de 50 kg                  |
+| Azúcar mascabado | Saco de 25 kg                  |
+| Azúcar glass     | Saco de 20 kg                  |
+
+A partir de la retroalimentación del equipo de ZUCARMEX se retiraron los beneficios por volumen y su configuración administrativa. Los precios son volátiles: cada nueva solicitud calcula únicamente cantidad por precio de referencia; el administrador confirma las condiciones comerciales de cada pedido.
 
 Después de migrar y configurar `.env.local`:
 
@@ -142,20 +144,20 @@ En el entorno actual, `.env.local` contiene la conexión al **proyecto alojado d
 | `/portal/nuevo-pedido` | `/admin/pedidos`      |
 | `/portal/pedidos`      | `/admin/pedidos/[id]` |
 | `/portal/pedidos/[id]` | `/admin/clientes`     |
-| `/portal/recurrentes`  | `/admin/beneficios`   |
+| `/portal/recurrentes`  |                       |
 | `/portal/ayuda`        |                       |
 | `/portal/perfil`       |                       |
 
 Las rutas se resuelven con segmentos opcionales del App Router. La sesión y el rol se verifican en layouts y páginas; cada operación de escritura vuelve a comprobar identidad y permisos en el servidor y en PostgreSQL. Un cliente que intenta abrir `/admin` vuelve a `/portal`, y el administrador sólo accede a su panel. No existe cambio de rol sin autenticación cuando Supabase está configurado.
 
-El catálogo permite buscar y agregar varias líneas a una solicitud. El asistente permite editar cantidades, seleccionar fecha futura y modalidad, revisar importes y enviar. El historial permite filtrar, seguir y repetir pedidos. El administrador puede editar o agregar productos, activar/desactivar su visibilidad, editar rangos, confirmar importes, actualizar estados, registrar incidencias y cancelar pedidos sin pago.
+El catálogo permite buscar y agregar varias líneas a una solicitud. El asistente permite editar cantidades, seleccionar fecha futura, entrega y método de pago, revisar importes y enviar. El histórico permite filtrar por período y, en administración, por cliente; muestra unidades, toneladas, montos y métodos de pago. Cada cliente tiene su fecha de última compra. El administrador puede editar o agregar productos con su peso por unidad, activar/desactivar su visibilidad, confirmar importes, actualizar estados, registrar incidencias y cancelar pedidos sin pago.
 
 ## Demostración recomendada: cinco minutos
 
-1. **Cliente:** inicia sesión como `cliente@demo-zucarmex.com`. Muestra el precio actualizado, pedido activo, último pedido y beneficio contextual.
-2. **Recompra:** pulsa **Repetir último pedido**. Cambia 20 a **25 sacos** de azúcar estándar demo. Con referencia de $1,245 se muestra **4%**, descuento de $1,245 y total estimado de **$29,880 MXN**.
-3. **Anticipación:** selecciona una fecha futura y **Entrega en dirección registrada**. Revisa el resumen y pulsa **Enviar solicitud**. Aparece **Solicitud recibida**, un folio y la advertencia de confirmación comercial.
-4. **Administrador:** cierra sesión e ingresa como `admin@demo-zucarmex.com` (o usa otro navegador con sesión independiente). Abre la nueva solicitud, revisa los precios por saco, selecciona **Confirmado**, marca disponibilidad y guarda. También puedes mostrar los estados posteriores.
+1. **Cliente:** inicia sesión como `cliente@demo-zucarmex.com`. Muestra el precio de referencia, pedidos entregados, monto comprado, toneladas y fecha de última compra. Abre el histórico para revisar cada pedido.
+2. **Recompra:** pulsa **Repetir último pedido**. Cambia 20 a **25 sacos** de azúcar estándar demo. Con referencia de $1,245 se muestra un total estimado de **$31,125 MXN** y un volumen de **1.25 toneladas**. No se aplican descuentos automáticos.
+3. **Anticipación:** selecciona una fecha futura, **Entrega en dirección registrada** y **Transferencia bancaria** como método de pago. Revisa el resumen y pulsa **Enviar solicitud**. Aparece **Solicitud recibida**, un folio y la advertencia de confirmación comercial.
+4. **Administrador:** cierra sesión e ingresa como `admin@demo-zucarmex.com` (o usa otro navegador con sesión independiente). Abre la nueva solicitud, revisa los precios por saco, selecciona **Confirmado**, marca disponibilidad y guarda. También puedes mostrar los estados posteriores. En **Clientes**, consulta monto vendido, toneladas y última compra por negocio; el enlace de cada cliente abre su histórico filtrado.
 5. **Pago:** vuelve al cliente y actualiza el seguimiento. Se distingue el **precio confirmado** del estimado. Abre **Ir a pago simulado**, elige **Transferencia bancaria** y pulsa **Simular pago**. Aparece **Pago registrado para fines demostrativos**.
 6. **Recurrente:** en ese pedido pulsa **Programar pedido recurrente**, elige **Cada 15 días** y guarda. Si hoy fuera 23 de octubre, la fecha sugerida sería **7 de noviembre**. El seed incluye además una programación pendiente hoy para mostrar **Revisar y confirmar** durante la exposición.
 7. Revisa esa programación: ajusta cantidades, fecha y modalidad, o **omite** la recurrencia. Sólo al pulsar **Enviar solicitud** se genera un nuevo pedido en estado **Solicitud recibida**. Se calculan precios vigentes y se avanza la próxima fecha.
@@ -164,23 +166,34 @@ Las programaciones futuras muestran su fecha y necesitan confirmación cuando ll
 
 ## Reglas y modelo de datos
 
-Tablas: `profiles`, `clients`, `products`, `volume_discount_tiers`, `orders`, `order_items`, `recurring_schedules`, `recurring_schedule_items`, `payments`.
+Tablas activas: `profiles`, `clients`, `products`, `orders`, `order_items`, `recurring_schedules`, `recurring_schedule_items`, `payments`. La tabla antigua `volume_discount_tiers` y los campos históricos de descuento se conservan como antecedente de la primera versión, sin consultas desde la aplicación ni permisos de acceso para usuarios autenticados. La operación para configurar beneficios fue retirada.
 
 - El precio de referencia se guarda como snapshot en cada partida. Una actualización del catálogo no modifica solicitudes anteriores. Repetir un pedido usa referencias **actuales**.
-- Los descuentos se aplican por producto y se redondean por partida a centavos. Los rangos deben ser continuos y crecientes. Cambiarlos sólo afecta solicitudes nuevas.
+- Las solicitudes nuevas no aplican beneficios estandarizados: total estimado = cantidad × referencia vigente, redondeado por partida a centavos. Se conservan los importes de pedidos anteriores; no se recalculan ventas históricas al actualizar el portal.
 - La fecha requerida expresa intención de abastecimiento: **no congela precios ni garantiza entrega**.
 - Las programaciones son intenciones, no compras. Confirmar es transaccional: crea una solicitud y avanza la programación bajo bloqueo para impedir doble confirmación.
-- El administrador confirma precio unitario; el servidor calcula el total con el beneficio guardado en la solicitud. No se permite saltar de solicitud a preparación sin confirmar previamente.
+- El administrador confirma precio unitario; el servidor calcula el importe por cantidad. Al avanzar de estado, una partida con el mismo precio conserva su importe previamente confirmado, incluidas condiciones de la primera versión. Un precio nuevo no aplica reglas de volumen. No se permite saltar de solicitud a preparación sin confirmar previamente.
+- El método de pago se selecciona al solicitar, aparece en el resumen, histórico y seguimiento, y puede elegirse de nuevo al registrar el pago simulado. Hay transferencia bancaria, crédito autorizado y pago en Punto de Venta. Seleccionar un método no registra un pago.
 - Se paga únicamente después de confirmar (estados Confirmado, Preparando, Listo o Entregado). El importe procede del total confirmado. La operación es idempotente: un pedido tiene como máximo un pago.
 - Un precio pagado no se puede modificar. Un pedido pagado que requiere revisión se marca con **Incidencia**; la simulación no implementa devoluciones. Los pedidos entregados o cancelados están cerrados.
 - Los estados son Solicitud recibida, En validación, Confirmado, Preparando, Listo, Entregado, Incidencia y Cancelado.
 - No hay cron. Las alertas se calculan al visitar/actualizar el portal.
 
+### Histórico, ventas y toneladas
+
+- Para este prototipo, una venta es un pedido **Entregado** con importe confirmado. Se excluyen solicitudes, pedidos en preparación, cancelados e incidencias de los montos y toneladas vendidos.
+- El histórico conserva todos los pedidos y permite consultar su estado, importe estimado o confirmado, unidades, toneladas y método de pago.
+- La **última compra** corresponde a la fecha de creación del pedido entregado más reciente, en la zona de Culiacán. No se usa `updated_at`: una corrección o un pago posterior no cambia la fecha de compra.
+- El volumen se calcula sumando `cantidad × peso por unidad en kg / 1000` para cada presentación. No se supone que todas las unidades pesen 50 kg.
+- Nombre, presentación y peso se guardan como snapshot al crear cada solicitud. Cambiar o desactivar un producto no modifica las partidas del histórico.
+- Las migraciones incorporan pesos de presentaciones conocidas: sacos de 50/25/20 kg del seed y el catálogo ya cargado de costales de 25 kg, paquetes de 10 × 900 g (9 kg) y de 10 × 1 kg (10 kg). Los tres fixtures originales recuperan su presentación de 50 kg desde el seed; no se supone que pesaban lo mismo que el catálogo actual. Otros registros antiguos sin peso quedan como **Peso pendiente** o **volumen parcial**, sin inventar toneladas. El administrador captura el peso para los nuevos productos.
+- Los resúmenes del histórico siguen los filtros de período y cliente; las pestañas de estado filtran la tabla. Los montos anteriores a esta actualización se conservan tal como fueron confirmados.
+
 ### Seguridad proporcional
 
 RLS restringe perfiles, negocios, pedidos, partidas, recurrencias y pagos a su propietario. El administrador consulta la información necesaria para el prototipo. Los clientes no pueden cambiar su rol ni escribir directamente estados, precios o totales.
 
-Las RPC `submit_order`, `admin_update_order`, `simulate_payment`, `create_schedule`, `manage_schedule` y `update_discount_tiers` validan permisos y reglas en la base de datos. No hay permisos de escritura directa para pedidos, pagos o recurrencias desde clientes autenticados. Las funciones internas no son invocables anónimamente. Los precios del navegador nunca son la fuente del cálculo. La API comprueba el origen de solicitudes y las cookies del modo local son HttpOnly y SameSite=Lax.
+Las RPC `submit_order`, `admin_update_order`, `simulate_payment`, `create_schedule`, `manage_schedule` validan permisos y reglas en la base de datos. No hay permisos de escritura directa para pedidos, pagos o recurrencias desde clientes autenticados. Las funciones internas no son invocables anónimamente. Los precios del navegador nunca son la fuente del cálculo. La API comprueba el origen de solicitudes y las cookies del modo local son HttpOnly y SameSite=Lax.
 
 ## Verificación
 
@@ -190,13 +203,15 @@ npm test
 npm run build
 ```
 
-Con Supabase **local** iniciado y usuarios demo creados:
+Con Supabase **local** iniciado, todas las migraciones aplicadas y usuarios demo creados:
 
 ```bash
 npm run test:integration
 ```
 
-Las pruebas de integración usan Auth y PostgreSQL reales. Comprueban aislamiento entre dos clientes, imposibilidad de escalar rol o confirmar desde cliente, snapshots, cálculo de volumen, confirmación administrativa, pago idempotente y recurrencias sin compras automáticas. Crean datos temporales que eliminan al finalizar. Por seguridad se omiten si el backend no es localhost; no se ejecutan contra proyectos alojados.
+Si `.env.local` apunta al proyecto alojado y conservas el respaldo de desarrollo, ejecuta `node --env-file=.env.supabase-local --test tests/supabase.integration.mjs` para probar la instancia local.
+
+Las pruebas de dominio verifican precios sin descuentos, toneladas de distintas presentaciones, última compra, filtros temporales de Culiacán, conservación de importes y métodos de pago. Las pruebas de integración usan Auth y PostgreSQL reales. Comprueban aislamiento entre dos clientes, imposibilidad de escalar rol o confirmar desde cliente, snapshots de precio/nombre/peso, confirmación administrativa, pago idempotente, importes históricos y recurrencias sin compras automáticas. Crean datos temporales que eliminan al finalizar. Por seguridad se omiten si el backend no es localhost; no se ejecutan contra proyectos alojados.
 
 ## Arquitectura y evolución a SAP
 
@@ -208,7 +223,7 @@ src/lib/order-service.ts Casos de uso y operaciones
 src/lib/data/            Repositorio de lectura y demo local aislada
 src/lib/supabase/        Clientes SSR/navegador y configuración
 supabase/migrations/     Modelo, RLS y operaciones transaccionales
-supabase/seed.sql         Catálogo y beneficios ficticios
+supabase/seed.sql         Catálogo, precios y pesos ficticios
 scripts/seed-users.mjs   Usuarios Auth y fixtures de demostración
 ```
 
@@ -220,7 +235,7 @@ Para sustituir el catálogo usa el panel de productos o edita `supabase/seed.sql
 
 ## Limitaciones académicas
 
-- Productos, imágenes, precios, negocios y descuentos **demo**; no representan información o condiciones comerciales reales.
+- Productos, empaques ilustrados, precios y negocios **demo**; no representan catálogo o condiciones comerciales reales. Los logos de `public/branding/` fueron proporcionados por el equipo de ZUCARMEX.
 - **Pago simulado**, sin dinero ni información bancaria.
 - **Sin SAP**, inventario real, facturación, CFDI, contabilidad, CRM ni ERP.
 - **Sin logística real**: no hay fletes, mapas, rutas o promesas automáticas de entrega.

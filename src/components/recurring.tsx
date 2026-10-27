@@ -121,7 +121,7 @@ export function Recurring({ data }: { data: PortalData }) {
                       {data.products.find((p) => p.id === item.product_id)?.name ??
                         'Producto no disponible'}
                     </strong>
-                    <span>{item.quantity} sacos</span>
+                    <span>{item.quantity} unidades</span>
                   </div>
                 ))}
                 <div className="schedule-date">
